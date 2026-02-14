@@ -18,6 +18,31 @@ from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
+
+def _format_exception_chain(e: BaseException, max_length: int = 800) -> str:
+    """Unwrap TaskGroup/ExceptionGroup and __cause__ so the real error is visible in logs."""
+    parts: list[str] = []
+    seen: set[int] = set()
+
+    def add(exc: BaseException | None) -> None:
+        if exc is None or id(exc) in seen:
+            return
+        seen.add(id(exc))
+        if hasattr(exc, "exceptions"):
+            for sub in getattr(exc, "exceptions", ()):
+                add(sub)
+            return
+        parts.append(f"{type(exc).__name__}: {exc}")
+        add(getattr(exc, "__cause__", None))
+        add(getattr(exc, "__context__", None))
+
+    add(e)
+    if not parts:
+        parts.append(f"{type(e).__name__}: {e}")
+    detail = " | ".join(parts)
+    return detail[:max_length] + "..." if len(detail) > max_length else detail
+
+
 # Run async MCP client in a thread so asyncio.run() works when called from FastAPI (which already has a running event loop).
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="mcp_client")
 
@@ -111,10 +136,11 @@ async def _with_session(coro):
                     logger.info("MCP (streamable-http): session established for %s", url)
                     return await coro(session)
         except Exception as e:
+            detail = _format_exception_chain(e)
             logger.warning(
                 "MCP (streamable-http): connection or session failed for %s: %s",
                 url,
-                e,
+                detail,
                 exc_info=True,
             )
             raise
