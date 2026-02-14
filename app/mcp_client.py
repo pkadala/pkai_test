@@ -9,11 +9,14 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import json
+import logging
 import os
 import re
 import sys
 
 from langchain_core.tools import tool
+
+logger = logging.getLogger(__name__)
 
 # Run async MCP client in a thread so asyncio.run() works when called from FastAPI (which already has a running event loop).
 _executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="mcp_client")
@@ -99,11 +102,22 @@ async def _with_session(coro):
                 "WORKSPACE_MCP_HTTP_URL is required when WORKSPACE_MCP_TRANSPORT=streamable-http. "
                 "Start the server with e.g. uvx workspace-mcp --transport streamable-http"
             )
-        from mcp.client.streamable_http import streamable_http_client
-        async with streamable_http_client(url) as (read_stream, write_stream, _):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                return await coro(session)
+        logger.info("MCP (streamable-http): connecting to %s", url)
+        try:
+            from mcp.client.streamable_http import streamable_http_client
+            async with streamable_http_client(url) as (read_stream, write_stream, _):
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
+                    logger.info("MCP (streamable-http): session established for %s", url)
+                    return await coro(session)
+        except Exception as e:
+            logger.warning(
+                "MCP (streamable-http): connection or session failed for %s: %s",
+                url,
+                e,
+                exc_info=True,
+            )
+            raise
     else:
         from mcp import StdioServerParameters
         from mcp.client.stdio import stdio_client

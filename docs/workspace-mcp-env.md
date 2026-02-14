@@ -72,3 +72,35 @@ Set these in the environment of the process that runs `workspace-mcp --transport
 - **Local (stdio):** Use `WORKSPACE_MCP_OAUTH_REDIRECT_URI=http://localhost:8765/oauth2callback`. workspace-mcp runs on the same machine and can open a server on port 8765 for the OAuth callback.
 - **Railway (stdio):** A single app process cannot reliably run workspace-mcp’s OAuth server (port conflict). Prefer **streamable-http** with a separate MCP server that has its own public URL and handles the OAuth callback.
 - **Railway (streamable-http):** Deploy workspace-mcp as a second service; set its public URL as `WORKSPACE_MCP_BASE_URI` and `GOOGLE_OAUTH_REDIRECT_URI`, and add that redirect URI in Google Cloud Console. On the app service, set only `WORKSPACE_MCP_TRANSPORT=streamable-http` and `WORKSPACE_MCP_HTTP_URL`.
+
+---
+
+## Troubleshooting: GET /mcp 400 Bad Request
+
+If the MCP server log shows:
+
+```text
+[INFO] Created new transport with session ID: ...
+INFO: ... "GET /mcp HTTP/1.1" 400 Bad Request
+```
+
+the **GET** request is reaching the server **without** the `mcp-session-id` header. The Streamable HTTP server returns **400 Bad Request: Missing session ID** when a GET request does not include that header (it is required so the server can route the GET to the same session that handled the POST).
+
+**Likely causes**
+
+1. **Load balancer / proxy stripping headers**  
+   Some proxies drop non-standard headers. The MCP client sends `mcp-session-id` on GET; if the proxy strips it, the server sees no session id and returns 400.
+
+2. **No sticky sessions**  
+   POST (initialize) may hit instance A and create a session; GET may hit instance B. If the header is present, instance B would return 404 (session not found), not 400. So 400 usually means the header is missing rather than wrong instance.
+
+**What to do**
+
+- **Preserve `mcp-session-id`**  
+  On Railway (or any proxy in front of the MCP service), ensure the proxy forwards the `mcp-session-id` request header. Do not strip or filter it.
+
+- **Sticky sessions (recommended)**  
+  Configure the MCP service so that all requests for the same client go to the same instance (e.g. session affinity / sticky sessions). That way the GET reaches the same server instance that created the session for the POST.
+
+- **Confirm in logs**  
+  On the MCP server, temporarily log incoming GET request headers (e.g. `request.headers.get("mcp-session-id")`). If it is `None` or empty, the header is being dropped before it reaches the server.
