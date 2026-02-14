@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PKAI – Personal Knowledge AI Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .message-user { background: #e0f2fe; }
+    .message-assistant { background: #f0fdf4; }
+    .badge-knowledge { background: #22c55e; color: white; }
+    .badge-tools { background: #3b82f6; color: white; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <div class="max-w-3xl mx-auto px-4 py-8">
+    <header class="mb-8">
+      <h1 class="text-2xl font-bold text-slate-800">PKAI</h1>
+      <p class="text-slate-600">Personal Knowledge AI Assistant – RAG and tool-driven agent</p>
+      <nav class="mt-2">
+        <a href="/ingest" class="text-blue-600 hover:underline">Ingest documents</a>
+      </nav>
+    </header>
+
+    <div id="chat" class="space-y-4 mb-6">
+      <div class="text-slate-500 text-sm">
+        Ask a question. The agent may search your knowledge base and use tools; responses show when knowledge or tools were used.
+      </div>
+    </div>
+
+    <form id="form" class="flex gap-2">
+      <input
+        type="text"
+        id="input"
+        name="message"
+        placeholder="Your question..."
+        class="flex-1 rounded-lg border border-slate-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        autocomplete="off"
+      />
+      <button
+        type="submit"
+        class="rounded-lg bg-blue-600 text-white px-4 py-2 hover:bg-blue-700 focus:ring-2 focus:ring-blue-400"
+      >
+        Send
+      </button>
+    </form>
+
+    <footer class="mt-8 text-slate-500 text-sm">
+      <p>State-changing actions require your confirmation. No silent writes.</p>
+    </footer>
+  </div>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+
+    function addMessage(role, content, meta = {}) {
+      const div = document.createElement('div');
+      div.className = role === 'user' ? 'message-user rounded-lg p-4' : 'message-assistant rounded-lg p-4';
+      let html = '<div class="whitespace-pre-wrap">' + escapeHtml(content) + '</div>';
+      if (meta.used_knowledge) {
+        html += '<span class="badge-knowledge text-xs rounded px-2 py-0.5 mt-2 inline-block">Used knowledge base</span> ';
+      }
+      if (meta.tools_invoked && meta.tools_invoked.length) {
+        html += '<span class="badge-tools text-xs rounded px-2 py-0.5 mt-2 inline-block">Tools: ' + escapeHtml(meta.tools_invoked.join(', ')) + '</span>';
+      }
+      if (meta.suggested_actions && meta.suggested_actions.length) {
+        html += '<div class="mt-2 text-amber-700 text-sm">Suggested actions (confirm to run): ' + meta.suggested_actions.length + '</div>';
+      }
+      div.innerHTML = html;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const message = input.value.trim();
+      if (!message) return;
+      input.value = '';
+      addMessage('user', message);
+      const btn = form.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Request failed');
+        addMessage('assistant', data.response, {
+          used_knowledge: data.used_knowledge,
+          tools_invoked: data.tools_invoked,
+          suggested_actions: data.suggested_actions
+        });
+      } catch (err) {
+        addMessage('assistant', 'Error: ' + (err.message || String(err)));
+      }
+      btn.disabled = false;
+    });
+  </script>
+</body>
+</html>
