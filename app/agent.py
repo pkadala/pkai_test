@@ -30,6 +30,35 @@ TOOLS = [search_knowledge_base, fetch_external_updates, create_file_in_drive, li
 TOOL_MAP = {t.name: t for t in TOOLS}
 
 
+def _format_tool_error(e: BaseException, max_length: int = 1500) -> str:
+    """Unwrap exception chain (TaskGroup, ExceptionGroup, __cause__) and return a detailed message."""
+    parts: list[str] = []
+    seen: set[int] = set()
+
+    def add(exc: BaseException | None) -> None:
+        if exc is None or id(exc) in seen:
+            return
+        seen.add(id(exc))
+        # ExceptionGroup (e.g. from TaskGroup) - include each sub-exception
+        if hasattr(exc, "exceptions"):
+            for sub in getattr(exc, "exceptions", ()):
+                add(sub)
+            return
+        msg = f"{type(exc).__name__}: {exc}"
+        if msg.strip():
+            parts.append(msg)
+        add(getattr(exc, "__cause__", None))
+        add(getattr(exc, "__context__", None))
+
+    add(e)
+    if not parts:
+        parts.append(f"{type(e).__name__}: {e}")
+    detail = " | ".join(parts)
+    if len(detail) > max_length:
+        detail = detail[: max_length - 3] + "..."
+    return detail
+
+
 def _run_tool(name: str, args: dict) -> str:
     """Invoke a tool by name and return its string result."""
     tool = TOOL_MAP.get(name)
@@ -39,7 +68,9 @@ def _run_tool(name: str, args: dict) -> str:
         result = tool.invoke(args)
         return result if isinstance(result, str) else str(result)
     except Exception as e:
-        return f"Tool error: {e}"
+        detail = _format_tool_error(e)
+        logging.exception("Tool %s failed: %s", name, detail)
+        return f"Tool error: {detail}"
 
 
 def run_agent(query: str, chat_history: list | None = None) -> ChatResponse:

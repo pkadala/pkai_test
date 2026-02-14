@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -57,7 +57,21 @@ async def index(request: Request) -> HTMLResponse:
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(body: ChatRequest) -> ChatResponse:
     """Process a user message through the LangChain agent and return a grounded response."""
-    return run_agent(body.message, chat_history=None)
+    try:
+        return run_agent(body.message, chat_history=None)
+    except Exception as e:
+        err_msg = str(e).lower()
+        if "resource_exhausted" in err_msg or "429" in err_msg or "quota" in err_msg:
+            raise HTTPException(
+                status_code=429,
+                detail="LLM API quota or rate limit exceeded. Try again in a minute, or set LLM_PROVIDER=openai in .env to use OpenAI.",
+            ) from e
+        if "langchain_google_genai" in type(e).__module__ or "generativeai" in err_msg:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Gemini API error: {str(e)[:400]}",
+            ) from e
+        raise
 
 
 @app.get("/auth/google/drive")
