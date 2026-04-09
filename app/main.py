@@ -72,7 +72,7 @@ def _get_thread_id(request: Request) -> str:
 @app.get("/", response_class=HTMLResponse)
 async def ask_page(request: Request) -> HTMLResponse:
     """Main ask UI (pkai-style)."""
-    return templates.TemplateResponse("ask.html", {"request": request})
+    return templates.TemplateResponse(request, "ask.html", {})
 
 
 @app.post("/query", response_class=HTMLResponse)
@@ -85,9 +85,9 @@ async def query_form(request: Request, query_text: str = Form(..., alias="query"
         action_proposed = result.action_proposed
         tools_simple = result.tools_invoked
         response = templates.TemplateResponse(
+            request,
             "ask.html",
             {
-                "request": request,
                 "query": query_text,
                 "response": result.response,
                 "knowledge_used": knowledge_used,
@@ -103,9 +103,9 @@ async def query_form(request: Request, query_text: str = Form(..., alias="query"
         logger.exception("Query failed: %s", e)
         err_msg = str(e).strip() or f"{type(e).__name__}"
         err_response = templates.TemplateResponse(
+            request,
             "ask.html",
             {
-                "request": request,
                 "query": query_text,
                 "response": f"Error: {err_msg}",
                 "knowledge_used": False,
@@ -226,9 +226,9 @@ async def ingest_page(request: Request) -> HTMLResponse:
     delete_message = request.query_params.get("delete_message")
     indexed = get_indexed_stats()
     return templates.TemplateResponse(
+        request,
         "ingest.html",
         {
-            "request": request,
             "drive_oauth_connected": connected == "1",
             "drive_oauth_error": error,
             "ingest_status": ingest_status,
@@ -282,9 +282,9 @@ async def ingest_form(
         else:
             indexed = get_indexed_stats()
             return templates.TemplateResponse(
+                request,
                 "ingest.html",
                 {
-                    "request": request,
                     "ingest_status": "error",
                     "ingest_message": f"Unknown source: {source}",
                     "indexed": indexed,
@@ -295,9 +295,9 @@ async def ingest_form(
         indexed = get_indexed_stats()
         if not out.ok:
             return templates.TemplateResponse(
+                request,
                 "ingest.html",
                 {
-                    "request": request,
                     "ingest_status": "error",
                     "ingest_message": out.message,
                     "indexed": indexed,
@@ -309,9 +309,9 @@ async def ingest_form(
         logger.exception("Ingest failed: %s", e)
         indexed = get_indexed_stats()
         return templates.TemplateResponse(
+            request,
             "ingest.html",
             {
-                "request": request,
                 "ingest_status": "error",
                 "ingest_message": str(e),
                 "indexed": indexed,
