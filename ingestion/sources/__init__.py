@@ -18,6 +18,7 @@ def load_documents_from_source(
     folder_id: str | None = None,
     gdrive_credentials_path: str | None = None,
     workspace_mcp_path: str | None = None,
+    gdrive_recursive: bool = True,
 ) -> list[Document]:
     """
     Load documents from the given source.
@@ -32,6 +33,7 @@ def load_documents_from_source(
         return load_documents_gdrive_sdk(
             folder_id=folder_id,
             credentials_path=gdrive_credentials_path,
+            recursive=gdrive_recursive,
         )
     if source == "gdrive_oauth":
         return load_documents_gdrive_oauth(folder_id=folder_id)

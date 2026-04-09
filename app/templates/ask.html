@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Ask{% endblock %}
+{% block content %}
+
+<div id="query-container" class="mb-8">
+  <form id="query-form" action="/query" method="post" class="flex gap-3">
+    <textarea
+      name="query"
+      placeholder="Ask about your knowledge base..."
+      rows="3"
+      class="flex-1 min-h-[4rem] px-4 py-3 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500 resize-y"
+      required
+    >{{ query or '' }}</textarea>
+    <button
+      type="submit"
+      id="ask-btn"
+      class="px-6 py-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      Ask
+    </button>
+  </form>
+  <div id="loading-overlay" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div class="flex flex-col items-center gap-4">
+      <svg class="animate-spin h-12 w-12 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <p class="text-slate-300 font-medium">Processing your query...</p>
+      <p class="text-slate-500 text-sm">Agent is reasoning and may invoke tools</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('query-form').addEventListener('submit', function() {
+    document.getElementById('loading-overlay').classList.remove('hidden');
+    document.getElementById('ask-btn').disabled = true;
+  });
+</script>
+
+{% if response %}
+<section class="space-y-6">
+  <div class="rounded-xl bg-slate-800/60 border border-slate-700 p-6">
+    <h2 class="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Response</h2>
+    <div class="prose prose-invert prose-slate max-w-none">
+      <p class="whitespace-pre-wrap text-slate-200">{{ response }}</p>
+    </div>
+  </div>
+
+  {% if reasoning_steps %}
+  <details class="rounded-xl bg-slate-800/60 border border-slate-700" open>
+    <summary class="px-6 py-4 cursor-pointer text-slate-300 hover:text-slate-100 font-medium flex items-center gap-2">
+      <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+      </svg>
+      Processing flow
+    </summary>
+    <div class="px-6 pb-6 pt-2 border-t border-slate-700 space-y-4">
+      {% for step in reasoning_steps %}
+      {% if step.type == 'thought' %}
+      <div class="flex gap-3">
+        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 text-xs font-bold">T</div>
+        <div class="flex-1 rounded-lg bg-slate-900/60 border border-slate-700 p-4">
+          <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">Agent reasoning</p>
+          <p class="text-slate-300 whitespace-pre-wrap text-sm">{{ step.content }}</p>
+        </div>
+      </div>
+      {% elif step.type == 'tool' %}
+      <div class="flex gap-3">
+        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 text-xs font-bold">&#128295;</div>
+        <div class="flex-1 rounded-lg bg-slate-900/60 border border-slate-700 p-4">
+          <p class="text-xs text-slate-500 uppercase tracking-wider mb-2">Tool: <span class="font-mono text-cyan-400">{{ step.tool_name }}</span></p>
+          {% if step.tool_input %}
+          <p class="text-xs text-slate-400 mb-1">Input:</p>
+          <pre class="text-xs text-slate-500 overflow-x-auto mb-2">{{ step.tool_input }}</pre>
+          {% endif %}
+          <p class="text-xs text-slate-400 mb-1">Output:</p>
+          <p class="text-sm text-slate-400 whitespace-pre-wrap">{{ step.tool_output[:400] }}{% if step.tool_output|length > 400 %}...{% endif %}</p>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+
+  {% if knowledge_used %}
+  <div class="flex items-center gap-2 text-cyan-400 text-sm">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span>Personal knowledge base was used</span>
+  </div>
+  {% endif %}
+
+  {% if action_proposed %}
+  <div class="flex items-center gap-2 text-amber-400 text-sm">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+    </svg>
+    <span>External action (Drive / Tasks) — review the response for what was done</span>
+  </div>
+  {% endif %}
+
+  {% if tools_invoked and not reasoning_steps %}
+  <div class="rounded-xl bg-slate-800/60 border border-slate-700 p-6">
+    <h2 class="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Tools Invoked</h2>
+    <ul class="space-y-4">
+      {% for inv in tools_invoked %}
+      <li class="border-l-2 border-cyan-500/50 pl-4">
+        <span class="font-mono text-cyan-400">{{ inv }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="rounded-xl bg-red-900/20 border border-red-800 p-4 text-red-300 text-sm">
+    {{ error }}
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% endblock %}

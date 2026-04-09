@@ -12,6 +12,18 @@ def get_retriever(k: int = 4) -> BaseRetriever:
     return get_vectorstore().as_retriever(search_kwargs={"k": k})
 
 
+def _is_placeholder_doc(doc: Document) -> bool:
+    """True for synthetic docs used when no FAISS index exists yet."""
+    meta = doc.metadata or {}
+    if meta.get("_pkai_placeholder") or meta.get("source") == "__pkai_empty_index__":
+        return True
+    text = (doc.page_content or "").strip()
+    return text == "Initial placeholder"
+
+
 def retrieve(query: str, k: int = 4) -> list[Document]:
-    """Convenience: retrieve documents for a query."""
-    return get_retriever(k=k).invoke(query)
+    """Convenience: retrieve documents for a query (never return empty-index placeholders)."""
+    # Over-fetch then filter so we still return up to k real chunks if the index mixes real + dummy.
+    raw = get_retriever(k=max(k * 4, k + 8)).invoke(query)
+    filtered = [d for d in raw if not _is_placeholder_doc(d)]
+    return filtered[:k]

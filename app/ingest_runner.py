@@ -5,12 +5,14 @@ from pathlib import Path
 
 from app.schemas import IngestRequest, IngestResponse
 
+_VALID_SOURCES = frozenset({"local", "gdrive_sdk", "gdrive_oauth", "workspace_mcp"})
+
 
 def run_ingest(options: IngestRequest | None = None) -> IngestResponse:
     """Load documents from the chosen source, chunk, embed, and persist. Returns result for API."""
     opts = options or IngestRequest()
     source = (opts.source or "local").strip().lower()
-    if source not in ("local", "gdrive_oauth"):
+    if source not in _VALID_SOURCES:
         return IngestResponse(ok=False, message=f"Unknown source: {opts.source}", chunks_created=0)
 
     try:
@@ -25,8 +27,9 @@ def run_ingest(options: IngestRequest | None = None) -> IngestResponse:
             source,
             local_path=opts.local_path or None,
             folder_id=opts.folder_id or None,
-            gdrive_credentials_path=None,
+            gdrive_credentials_path=opts.gdrive_credentials_path,
             workspace_mcp_path=None,
+            gdrive_recursive=opts.recursive,
         )
     except ValueError as e:
         return IngestResponse(ok=False, message=str(e), chunks_created=0)
@@ -59,5 +62,14 @@ def _no_docs_message(source: str) -> str:
     if source == "local":
         return "No documents found. Add .txt, .md, .pdf, or .docx files to the documents/ directory."
     if source == "gdrive_oauth":
-        return "No supported files in your Google Drive (or folder). Connect Google Drive first if you haven’t."
+        return "No supported files in your Google Drive (or folder). Connect Google Drive first if you haven't."
+    if source == "gdrive_sdk":
+        return (
+            "No supported files ingested. Check: (1) folder is shared with the service account email "
+            "from your JSON key; (2) files are under that folder or subfolders (recursive listing is used when "
+            "'Include subfolders' is on); (3) types are Google Docs/Sheets/Slides, PDF, TXT, MD, CSV, or DOCX; "
+            "(4) GOOGLE_DRIVE_CREDENTIALS_PATH points to the key file."
+        )
+    if source == "workspace_mcp":
+        return "No documents from workspace-mcp. Check OAuth and workspace-mcp setup."
     return "No documents found."
