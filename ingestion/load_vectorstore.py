@@ -1,7 +1,6 @@
 """Load documents using LangChain loaders (placeholder: extend with real loaders)."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from langchain_core.documents import Document

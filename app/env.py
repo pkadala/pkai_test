@@ -24,22 +24,9 @@ def _get_from_env_file(key: str) -> str:
     return os.environ.get(key, "").strip()
 
 
-def env() -> str:
-    """ENV: local or railway."""
-    return _get("ENV").lower()
-
-
 def llm_provider() -> str:
     """LLM_PROVIDER: openai or gemini."""
     return _get("LLM_PROVIDER").lower()
-
-
-def is_local() -> bool:
-    return env() == "local"
-
-
-def is_railway() -> bool:
-    return env() == "railway"
 
 
 def get_openai_key() -> str:
@@ -56,18 +43,8 @@ def get_google_key() -> str:
     return key
 
 
-def openai_api_key() -> str | None:
-    v = _get("OPENAI_API_KEY")
-    return v or None
-
-
 def openai_model() -> str:
     return _get("OPENAI_MODEL")
-
-
-def google_api_key() -> str | None:
-    v = _get("GOOGLE_API_KEY")
-    return v or None
 
 
 def gemini_model() -> str:
@@ -80,11 +57,6 @@ def openai_embedding_model() -> str:
 
 def gemini_embedding_model() -> str:
     return _get("GEMINI_EMBEDDING_MODEL")
-
-
-def database_url() -> str | None:
-    v = _get("DATABASE_URL")
-    return v or None
 
 
 def google_drive_credentials_path() -> str | None:

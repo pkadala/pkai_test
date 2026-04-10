@@ -37,18 +37,6 @@ class ChatResponse(BaseModel):
         False,
         description="Whether a state-changing external action ran (Drive / Tasks tools)",
     )
-    suggested_actions: list["SuggestedAction"] = Field(
-        default_factory=list,
-        description="State-changing actions requiring user confirmation",
-    )
-
-
-class SuggestedAction(BaseModel):
-    """A state-changing action proposed by the agent; requires user confirmation."""
-
-    tool_name: str
-    description: str
-    params: dict = Field(default_factory=dict)
 
 
 class QueryRequest(BaseModel):

@@ -15,7 +15,7 @@ from app.llm_factory import get_llm
 from app.tools.rag_tool import search_knowledge_base
 from app.tools.external_tool import fetch_external_updates
 from app.mcp_client import create_file_in_drive, create_google_task, list_google_task_lists
-from app.schemas import ChatResponse, SuggestedAction, ToolInvocationRecord
+from app.schemas import ChatResponse, ToolInvocationRecord
 
 SYSTEM_PROMPT = """You are the Personal Knowledge AI Assistant (PKAI). You help the user reason over their personal knowledge.
 
@@ -103,7 +103,6 @@ def run_agent(query: str, chat_history: list | None = None) -> ChatResponse:
     tools_invoked: list[str] = []
     tool_records: list[ToolInvocationRecord] = []
     reasoning_steps: list[dict] = []
-    suggested_actions: list[SuggestedAction] = []
     max_turns = 10
 
     output = "No response."
@@ -159,5 +158,4 @@ def run_agent(query: str, chat_history: list | None = None) -> ChatResponse:
         tool_records=tool_records,
         reasoning_steps=reasoning_steps,
         action_proposed=action_proposed,
-        suggested_actions=suggested_actions,
     )
