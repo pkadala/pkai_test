@@ -5,7 +5,7 @@ from pathlib import Path
 
 from app.schemas import IngestRequest, IngestResponse
 
-_VALID_SOURCES = frozenset({"local", "gdrive_sdk", "gdrive_oauth", "workspace_mcp"})
+_VALID_SOURCES = frozenset({"local", "gdrive_sdk"})
 
 
 def run_ingest(options: IngestRequest | None = None) -> IngestResponse:
@@ -28,7 +28,6 @@ def run_ingest(options: IngestRequest | None = None) -> IngestResponse:
             local_path=opts.local_path or None,
             folder_id=opts.folder_id or None,
             gdrive_credentials_path=opts.gdrive_credentials_path,
-            workspace_mcp_path=None,
             gdrive_recursive=opts.recursive,
         )
     except ValueError as e:
@@ -61,8 +60,6 @@ def run_ingest(options: IngestRequest | None = None) -> IngestResponse:
 def _no_docs_message(source: str) -> str:
     if source == "local":
         return "No documents found. Add .txt, .md, .pdf, or .docx files to the documents/ directory."
-    if source == "gdrive_oauth":
-        return "No supported files in your Google Drive (or folder). Connect Google Drive first if you haven't."
     if source == "gdrive_sdk":
         return (
             "No supported files ingested. Check: (1) folder is shared with the service account email "
@@ -70,6 +67,4 @@ def _no_docs_message(source: str) -> str:
             "'Include subfolders' is on); (3) types are Google Docs/Sheets/Slides, PDF, TXT, MD, CSV, or DOCX; "
             "(4) GOOGLE_DRIVE_CREDENTIALS_PATH points to the key file."
         )
-    if source == "workspace_mcp":
-        return "No documents from workspace-mcp. Check OAuth and workspace-mcp setup."
     return "No documents found."

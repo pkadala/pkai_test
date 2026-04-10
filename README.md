@@ -43,10 +43,8 @@ Open http://localhost:8000 and chat. The UI shows when knowledge or tools were u
 
 Use the **Ingest** page (link from the home page) or the CLI. Supported sources:
 
-- **Local**: Put `.txt`, `.md`, `.pdf`, or `.docx` in a `documents/` folder at the project root.
+- **Local**: Put `.txt`, `.md`, `.pdf`, or `.docx` in a `documents/` folder at the project root, or enter a path to a folder or single file on the Ingest form.
 - **Google Drive (SDK)**: Uses the Drive API with a service account; set `GOOGLE_DRIVE_CREDENTIALS_PATH`. Share folders with the service account email.
-- **Google Drive (OAuth)**: Uses your Google account — full access to your Drive. Set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` (Web application client), add redirect URI `http://localhost:8000/auth/google/drive/callback` in Google Cloud Console, then use **Connect Google Drive** on the Ingest page once.
-- **Google Workspace (MCP)**: Uses the [workspace-mcp](https://pypi.org/project/workspace-mcp/) PyPI package (Docs, Sheets, Drive). No clone or build; install with `pip install workspace-mcp`. Set `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` (Google Cloud OAuth Desktop credentials). OAuth runs on first use.
 
 CLI (local only): `ENV=local OPENAI_API_KEY=... python -m ingestion.ingest_docs`
 

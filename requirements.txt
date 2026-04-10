@@ -21,7 +21,7 @@ python-dotenv>=1.0.0
 # MCP (Model Context Protocol) - stdio + streamable-http
 mcp[cli]>=1.26.0
 
-# Google Workspace MCP (Python, for ingestion source workspace_mcp)
+# Google Workspace MCP (Python) — agent tools (Drive file, Tasks); not used for RAG ingest
 workspace-mcp>=1.10.0
 
 # DB (Railway)
@@ -33,10 +33,9 @@ unstructured[md]>=0.16.0
 python-docx>=1.0.0
 pypdf>=5.0.0
 
-# Google Drive SDK + OAuth ingestion
+# Google Drive API (service account ingest)
 google-api-python-client>=2.0.0
 google-auth>=2.0.0
-google-auth-oauthlib>=1.2.0
 google-auth-httplib2>=0.2.0
 
 # HTTP client (ingestion + MCP client)

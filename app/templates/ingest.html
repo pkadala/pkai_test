@@ -14,17 +14,6 @@
   {{ delete_message or delete_status }}
 </div>
 {% endif %}
-{% if drive_oauth_error and not ingest_status %}
-<div class="mb-6 rounded-lg p-4 bg-amber-900/20 border border-amber-800 text-amber-200 text-sm">
-  OAuth: {{ drive_oauth_error }}. <a href="/auth/google/drive" class="text-cyan-400 underline">Try again</a>
-</div>
-{% endif %}
-{% if drive_oauth_connected and not ingest_status %}
-<div class="mb-6 rounded-lg p-4 bg-cyan-900/30 border border-cyan-700 text-cyan-200 text-sm">
-  Google Drive (OAuth) connected. You can ingest from your account.
-</div>
-{% endif %}
-
 <div class="rounded-xl bg-slate-800/60 border border-slate-700 p-6 mb-8">
   <h2 class="text-lg font-medium text-slate-200 mb-4">Add documents</h2>
   <p class="text-slate-400 text-sm mb-6">Choose a source and ingest documents into your knowledge base. Supported formats: PDF, TXT, DOCX, Google Docs (exported), and more.</p>
@@ -41,20 +30,12 @@
           <input type="radio" name="source" value="gdrive_sdk" class="rounded" onchange="toggleSource('gdrive_sdk')">
           <span>Google Drive (API / service account)</span>
         </label>
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="radio" name="source" value="gdrive_oauth" class="rounded" onchange="toggleSource('gdrive_oauth')">
-          <span>Google Drive (OAuth)</span>
-        </label>
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="radio" name="source" value="workspace_mcp" class="rounded" onchange="toggleSource('workspace_mcp')">
-          <span>Google Workspace (MCP)</span>
-        </label>
       </div>
     </div>
 
     <div id="local-section">
       <label class="block text-sm text-slate-400 mb-1">Path (e.g. documents/ or ./documents; blank = project documents/)</label>
-      <input type="text" name="local_path" placeholder="documents/" class="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500">
+      <input type="text" name="local_path" placeholder="documents/ or /path/to/file.txt" class="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500">
     </div>
 
     <div id="gdrive_sdk-section" class="hidden space-y-3">
@@ -67,16 +48,6 @@
         <input type="checkbox" name="recursive" value="true" class="rounded" checked>
         <span class="text-sm text-slate-400">Include subfolders (searches nested folders; recommended if files are not at the top level)</span>
       </label>
-    </div>
-
-    <div id="gdrive_oauth-section" class="hidden space-y-3">
-      <p class="text-xs text-slate-500">Uses your Google account. <a href="/auth/google/drive" class="text-cyan-400 hover:underline">Connect Google Drive</a> first if not connected.</p>
-      <label class="block text-sm text-slate-400 mb-1">Folder name or ID (optional; blank = searchable scope)</label>
-      <input type="text" name="folder_id_oauth" placeholder="Folder name or ID" class="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-100">
-    </div>
-
-    <div id="workspace_mcp-section" class="hidden">
-      <p class="text-xs text-slate-500">Uses the <span class="text-cyan-400/90">workspace-mcp</span> package. Set <code class="text-cyan-400/90">GOOGLE_OAUTH_CLIENT_ID</code> and <code class="text-cyan-400/90">GOOGLE_OAUTH_CLIENT_SECRET</code>.</p>
     </div>
 
     <button type="submit" id="ingest-btn" class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
@@ -99,8 +70,6 @@
   function toggleSource(src) {
     document.getElementById('local-section').classList.toggle('hidden', src !== 'local');
     document.getElementById('gdrive_sdk-section').classList.toggle('hidden', src !== 'gdrive_sdk');
-    document.getElementById('gdrive_oauth-section').classList.toggle('hidden', src !== 'gdrive_oauth');
-    document.getElementById('workspace_mcp-section').classList.toggle('hidden', src !== 'workspace_mcp');
   }
   document.getElementById('ingest-form').addEventListener('submit', function() {
     document.getElementById('ingest-loading').classList.remove('hidden');

@@ -90,8 +90,11 @@ class AgentResponse(BaseModel):
 class IngestRequest(BaseModel):
     """Ingestion request: source and optional parameters."""
 
-    source: str = Field(default="local", description="local | gdrive_sdk | gdrive_oauth | workspace_mcp")
-    local_path: str | None = Field(None, description="Local folder path (local)")
+    source: str = Field(default="local", description="local | gdrive_sdk")
+    local_path: str | None = Field(
+        None,
+        description="Local directory or single file path (.txt, .md, .pdf, .docx); default is project documents/",
+    )
     folder_id: str | None = Field(None, description="Drive folder name or ID (gdrive_* sources)")
     document_ids: str | None = Field(None, description="Comma-separated file IDs (optional)")
     recursive: bool = Field(True, description="Include subfolders for Google Drive SDK ingest (default on)")

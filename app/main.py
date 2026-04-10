@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 from pathlib import Path
 from urllib.parse import quote
 from uuid import uuid4
@@ -25,29 +24,9 @@ from app.schemas import (
 )
 from app.agent import run_agent
 from app.ingest_runner import run_ingest
-from app.google_oauth import DRIVE_SCOPE, save_drive_tokens
 from app.index_service import delete_index, get_indexed_stats
-from app import env as env_loader
 
 logger = logging.getLogger(__name__)
-
-# Server-side OAuth state store (avoids cookie loss on redirect from Google)
-_oauth_states: dict[str, float] = {}
-_STATE_TTL_SEC = 600
-
-
-def _oauth_state_valid(state: str | None) -> bool:
-    if not state:
-        return False
-    now = time.time()
-    if state in _oauth_states and (now - _oauth_states[state]) < _STATE_TTL_SEC:
-        del _oauth_states[state]
-        return True
-    for s, t in list(_oauth_states.items()):
-        if now - t >= _STATE_TTL_SEC:
-            del _oauth_states[s]
-    return False
-
 
 app = FastAPI(
     title="PKAI",
@@ -159,67 +138,9 @@ async def api_query(req: QueryRequest) -> AgentResponse:
     )
 
 
-@app.get("/auth/google/drive")
-async def auth_google_drive_start():
-    """Redirect to Google OAuth consent for Drive access."""
-    if not env_loader.google_oauth_client_id() or not env_loader.google_oauth_client_secret():
-        return RedirectResponse(url="/ingest?error=oauth_not_configured", status_code=302)
-    from google_auth_oauthlib.flow import Flow
-
-    client_config = {
-        "web": {
-            "client_id": env_loader.google_oauth_client_id(),
-            "client_secret": env_loader.google_oauth_client_secret(),
-            "redirect_uris": [env_loader.google_oauth_redirect_uri()],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-        }
-    }
-    flow = Flow.from_client_config(client_config, scopes=DRIVE_SCOPE, redirect_uri=env_loader.google_oauth_redirect_uri())
-    url, state = flow.authorization_url(access_type="offline", prompt="consent")
-    _oauth_states[state] = time.time()
-    response = RedirectResponse(url=url, status_code=302)
-    response.set_cookie(key="oauth_state", value=state, max_age=600, httponly=True, samesite="lax", path="/")
-    return response
-
-
-@app.get("/auth/google/drive/callback")
-async def auth_google_drive_callback(request: Request, state: str | None = None, code: str | None = None):
-    """Exchange OAuth code for tokens and store them; redirect back to Ingest."""
-    if not code:
-        return RedirectResponse(url="/ingest?error=no_code", status_code=302)
-    if not _oauth_state_valid(state):
-        return RedirectResponse(url="/ingest?error=invalid_state", status_code=302)
-    if not env_loader.google_oauth_client_id() or not env_loader.google_oauth_client_secret():
-        return RedirectResponse(url="/ingest?error=oauth_not_configured", status_code=302)
-    from google_auth_oauthlib.flow import Flow
-
-    client_config = {
-        "web": {
-            "client_id": env_loader.google_oauth_client_id(),
-            "client_secret": env_loader.google_oauth_client_secret(),
-            "redirect_uris": [env_loader.google_oauth_redirect_uri()],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-        }
-    }
-    flow = Flow.from_client_config(client_config, scopes=DRIVE_SCOPE, redirect_uri=env_loader.google_oauth_redirect_uri())
-    flow.oauth2session._state = state
-    try:
-        flow.fetch_token(code=code)
-        save_drive_tokens(flow.credentials)
-    except Exception:
-        return RedirectResponse(url="/ingest?error=token_exchange_failed", status_code=302)
-    response = RedirectResponse(url="/ingest?connected=1", status_code=302)
-    response.delete_cookie("oauth_state", path="/")
-    return response
-
-
 @app.get("/ingest", response_class=HTMLResponse)
 async def ingest_page(request: Request) -> HTMLResponse:
     """Ingest documents page with index stats."""
-    connected = request.query_params.get("connected")
-    error = request.query_params.get("error")
     ingest_status = request.query_params.get("ingest_status")
     ingest_message = request.query_params.get("ingest_message")
     delete_status = request.query_params.get("delete_status")
@@ -229,8 +150,6 @@ async def ingest_page(request: Request) -> HTMLResponse:
         request,
         "ingest.html",
         {
-            "drive_oauth_connected": connected == "1",
-            "drive_oauth_error": error,
             "ingest_status": ingest_status,
             "ingest_message": ingest_message,
             "delete_status": delete_status,
@@ -246,7 +165,6 @@ async def ingest_form(
     source: str = Form(...),
     local_path: str = Form(""),
     folder_id: str = Form(""),
-    folder_id_oauth: str = Form(""),
     gdrive_credentials_path: str = Form(""),
     document_ids: str = Form(""),
     recursive: str = Form(""),
@@ -269,16 +187,6 @@ async def ingest_form(
                 recursive=rec,
                 gdrive_credentials_path=gdrive_credentials_path.strip() or None,
             )
-        elif src == "gdrive_oauth":
-            fid = (folder_id_oauth or folder_id).strip() or None
-            req = IngestRequest(
-                source="gdrive_oauth",
-                folder_id=fid,
-                document_ids=document_ids.strip() or None,
-                recursive=rec,
-            )
-        elif src == "workspace_mcp":
-            req = IngestRequest(source="workspace_mcp")
         else:
             indexed = get_indexed_stats()
             return templates.TemplateResponse(

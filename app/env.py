@@ -102,10 +102,6 @@ def google_oauth_client_secret() -> str | None:
     return v or None
 
 
-def google_oauth_redirect_uri() -> str:
-    return _get("GOOGLE_OAUTH_REDIRECT_URI")
-
-
 def user_google_email() -> str | None:
     v = _get("USER_GOOGLE_EMAIL") or _get("GOOGLE_EMAIL")
     return v or None

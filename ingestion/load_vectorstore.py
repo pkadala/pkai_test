@@ -19,33 +19,42 @@ def get_documents_dir() -> Path:
     return root / "documents"
 
 
+def _load_one_file(path: Path) -> list[Document]:
+    """Load a single supported file; return [] if unsupported or error."""
+    try:
+        suf = path.suffix.lower()
+        if suf == ".txt":
+            loader = TextLoader(str(path), encoding="utf-8")
+        elif suf == ".md":
+            loader = UnstructuredMarkdownLoader(str(path))
+        elif suf == ".pdf":
+            loader = PyPDFLoader(str(path))
+        elif suf in (".docx", ".doc"):
+            loader = Docx2txtLoader(str(path))
+        else:
+            return []
+        return loader.load()
+    except Exception as e:
+        print(f"Skip {path}: {e}")
+        return []
+
+
 def load_documents(directory: str | Path | None = None) -> list[Document]:
     """
-    Load all supported documents from a directory.
+    Load supported documents from a directory (recursive) or a single file path.
     Supports .txt, .md, .pdf, .docx.
     """
-    base = Path(directory) if directory else get_documents_dir()
+    base = Path(directory).expanduser() if directory else get_documents_dir()
     if not base.exists():
         return []
 
-    docs = []
-    for path in base.rglob("*"):
-        if path.is_file():
-            try:
-                if path.suffix.lower() == ".txt":
-                    loader = TextLoader(str(path), encoding="utf-8")
-                elif path.suffix.lower() == ".md":
-                    loader = UnstructuredMarkdownLoader(str(path))
-                elif path.suffix.lower() == ".pdf":
-                    loader = PyPDFLoader(str(path))
-                elif path.suffix.lower() in (".docx", ".doc"):
-                    loader = Docx2txtLoader(str(path))
-                else:
-                    continue
-                docs.extend(loader.load())
-            except Exception as e:
-                print(f"Skip {path}: {e}")
-                continue
+    if base.is_file():
+        docs = _load_one_file(base)
+    else:
+        docs = []
+        for path in base.rglob("*"):
+            if path.is_file():
+                docs.extend(_load_one_file(path))
 
     for d in docs:
         if not d.metadata.get("source"):
