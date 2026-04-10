@@ -94,7 +94,7 @@ Requires `workspace-mcp` (in requirements.txt), `GOOGLE_OAUTH_CLIENT_ID`, and `G
 - Set `ENV=railway` and `DATABASE_URL` (Postgres with pgvector).
 - Deploy this repo; the Dockerfile runs `uvicorn app.main:app`.
 - Run ingestion (e.g. one-off job) with `ENV=railway` and `DATABASE_URL` to populate pgvector.
-- **Google Drive (SDK) ingest:** `secrets/*.json` is not in the image. Either unset `GOOGLE_DRIVE_CREDENTIALS_PATH` and set **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** to the full service account JSON (paste as one Railway variable), or supply the key file in the container and set `GOOGLE_APPLICATION_CREDENTIALS` to its path.
+- **Google Drive (SDK) ingest:** `secrets/*.json` is not in the image. Set **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON`** to the full service account JSON, or set **`GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_B64`** to the file’s contents encoded with `base64` (no newlines), which avoids PEM/`private_key` newline mangling in some dashboards. Alternatively mount the key file and set `GOOGLE_APPLICATION_CREDENTIALS`. Unset `GOOGLE_DRIVE_CREDENTIALS_PATH` if the file is not in the image.
 
 ## License
 

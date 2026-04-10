@@ -1,6 +1,7 @@
 """Google Drive ingestion via official Drive API (SDK)."""
 from __future__ import annotations
 
+import base64
 import io
 import json
 import logging
@@ -117,24 +118,52 @@ def _resolve_credentials_path(path: str | None) -> str | None:
 
 # Raw JSON string (e.g. Railway secret) — avoids committing secrets/ to the image.
 _GOOGLE_DRIVE_SA_JSON_ENV = "GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON"
+# Same JSON, base64-encoded (avoids newline/quote mangling in dashboards).
+_GOOGLE_DRIVE_SA_JSON_B64_ENV = "GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_B64"
+
+
+def _normalize_service_account_info(info: dict) -> dict:
+    """
+    Fix private_key PEM after env pastes: literal \\n sequences must become newlines
+    or cryptography cannot parse the PEM (InvalidData / Unable to load PEM file).
+    """
+    pk = info.get("private_key")
+    if not isinstance(pk, str):
+        return info
+    if "\\n" in pk and pk.count("\n") < 2:
+        pk = pk.replace("\\n", "\n")
+    info = dict(info)
+    info["private_key"] = pk.strip()
+    return info
 
 
 def _service_account_info_from_env() -> dict | None:
-    """Parse service account JSON from GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON if set."""
+    """Parse service account JSON from env (raw JSON or base64)."""
+    b64 = (os.environ.get(_GOOGLE_DRIVE_SA_JSON_B64_ENV) or "").strip()
     raw = (os.environ.get(_GOOGLE_DRIVE_SA_JSON_ENV) or "").strip()
+    if b64:
+        try:
+            decoded = base64.standard_b64decode(b64)
+            raw = decoded.decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as e:
+            raise ValueError(
+                f"{_GOOGLE_DRIVE_SA_JSON_B64_ENV} must be standard base64 of the UTF-8 service account JSON file. {e}"
+            ) from e
     if not raw:
         return None
+    if (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'")):
+        raw = raw[1:-1]
     try:
         info = json.loads(raw)
     except json.JSONDecodeError as e:
         raise ValueError(
-            f"{_GOOGLE_DRIVE_SA_JSON_ENV} must be valid JSON (single-line or paste the full key). {e}"
+            f"{_GOOGLE_DRIVE_SA_JSON_ENV} (or {_GOOGLE_DRIVE_SA_JSON_B64_ENV}) must be valid JSON. {e}"
         ) from e
     if info.get("type") != "service_account":
         raise ValueError(
-            f"{_GOOGLE_DRIVE_SA_JSON_ENV} must be a Google service account key (type: service_account)."
+            "Service account env must be a Google Cloud key JSON (type: service_account)."
         )
-    return info
+    return _normalize_service_account_info(info)
 
 
 def _get_drive_service(credentials_path: str | None = None):

@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
-"""Minimal Google Drive API connectivity test (no LangChain). Run from project root."""
+"""Minimal Google Drive API connectivity test (no LangChain). Run from project root.
+
+Auth order (same as ingestion/gdrive_sdk):
+  1) GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_B64
+  2) GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON
+  3) GOOGLE_DRIVE_CREDENTIALS_PATH (file under project root)
+
+Quick local test for B64 (matches Railway):
+
+  export GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_B64="$(base64 < secrets/your-key.json | tr -d '\n')"
+  env -u GOOGLE_DRIVE_CREDENTIALS_PATH python scripts/test_gdrive_api_only.py
+"""
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -33,26 +45,66 @@ def resolve_key_path() -> Path | None:
     return cand if cand.is_file() else None
 
 
-def main() -> None:
+def load_sa_meta_and_creds():
+    """Return (meta dict, google.oauth2.service_account.Credentials)."""
     from google.oauth2 import service_account
-    from googleapiclient.discovery import build
+
+    b64 = (os.environ.get("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_B64") or "").strip()
+    raw_json = (os.environ.get("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON") or "").strip()
+    if b64:
+        try:
+            raw_json = base64.standard_b64decode(b64).decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as e:
+            print(f"ERROR: GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_B64 is not valid base64/UTF-8: {e}")
+            sys.exit(1)
+    if raw_json:
+        if (raw_json.startswith('"') and raw_json.endswith('"')) or (
+            raw_json.startswith("'") and raw_json.endswith("'")
+        ):
+            raw_json = raw_json[1:-1]
+        try:
+            meta = json.loads(raw_json)
+        except json.JSONDecodeError as e:
+            print(f"ERROR: JSON env is not valid JSON: {e}")
+            sys.exit(1)
+        pk = meta.get("private_key")
+        if isinstance(pk, str) and "\\n" in pk and pk.count("\n") < 2:
+            meta = dict(meta)
+            meta["private_key"] = pk.replace("\\n", "\n").strip()
+        creds = service_account.Credentials.from_service_account_info(meta, scopes=SCOPES)
+        return meta, creds
 
     key_path = resolve_key_path()
     if not key_path:
-        print("ERROR: Set GOOGLE_DRIVE_CREDENTIALS_PATH in .env to your service account JSON (e.g. secrets/file.json)")
+        print(
+            "ERROR: Set one of:\n"
+            "  GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_B64 (base64 of the whole JSON file), or\n"
+            "  GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON (raw JSON string), or\n"
+            "  GOOGLE_DRIVE_CREDENTIALS_PATH=secrets/your-key.json in .env"
+        )
         sys.exit(1)
 
     with open(key_path) as f:
         meta = json.load(f)
+    creds = service_account.Credentials.from_service_account_file(str(key_path), scopes=SCOPES)
+    return meta, creds
+
+
+def main() -> None:
+    from googleapiclient.discovery import build
+
+    meta, creds = load_sa_meta_and_creds()
     email = meta.get("client_email", "?")
     key_id = meta.get("private_key_id", "?")
-    print(f"Key file: {key_path.name}")
+    src = "env (B64 or JSON)" if os.environ.get("GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_B64") or os.environ.get(
+        "GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON"
+    ) else resolve_key_path()
+    print(f"Key source: {src}")
     print(f"Service account: {email}")
     print(f"private_key_id (metadata only): {key_id[:8]}...")
     print()
 
     try:
-        creds = service_account.Credentials.from_service_account_file(str(key_path), scopes=SCOPES)
         service = build("drive", "v3", credentials=creds, cache_discovery=False)
     except Exception as e:
         print(f"FAILED to build credentials or service: {e}")
