@@ -98,6 +98,13 @@ async def _call_tool(session, name: str, args: dict) -> str:
         return f"Error: {e}"
 
 
+def _mcp_unknown_tool_message(message: str, tool_name: str) -> bool:
+    """True if MCP server rejected the tool name (older vs newer workspace-mcp)."""
+    m = (message or "").lower()
+    t = tool_name.lower()
+    return "unknown tool" in m and t in m
+
+
 def _workspace_mcp_env() -> dict:
     """Env for workspace-mcp subprocess: OAuth port + credentials from .env so the subprocess sees them."""
     from app import env as env_loader
@@ -260,15 +267,18 @@ async def _create_google_task_async(
     notes: str | None = None,
     due: str | None = None,
 ) -> str:
-    """Create a task in Google Tasks via workspace-mcp create_task tool. Uses first task list if task_list_id not given."""
+    """Create a task via workspace-mcp: manage_task (new) or create_task (legacy). Uses first task list if task_list_id not given."""
 
     async def run(session):
         tid = task_list_id
         user_email = _user_google_email()
+        if not user_email:
+            return (
+                "Error: Set USER_GOOGLE_EMAIL (or GOOGLE_EMAIL) in .env for Google Tasks "
+                "(workspace-mcp manage_task requires user_google_email)."
+            )
         if not tid:
-            list_args = {"max_results": 10}
-            if user_email:
-                list_args["user_google_email"] = user_email
+            list_args = {"max_results": 10, "user_google_email": user_email}
             raw = await _call_tool(session, "list_task_lists", list_args)
             if not raw.strip().startswith("[") and not raw.strip().startswith("{"):
                 if "user_google_email" in raw.lower() or "missing" in raw.lower():
@@ -299,14 +309,29 @@ async def _create_google_task_async(
                         tid = (match.group(1) or match.group(2) or "").strip()
                     if not tid:
                         return f"Error: Could not get task list. Response: {raw[:200]}"
-        args = {"task_list_id": tid, "title": title}
-        if user_email:
-            args["user_google_email"] = user_email
+        args = {
+            "user_google_email": user_email,
+            "action": "create",
+            "task_list_id": tid,
+            "title": title,
+        }
         if notes:
             args["notes"] = notes
         if due:
             args["due"] = due
-        return await _call_tool(session, "create_task", args)
+        out = await _call_tool(session, "manage_task", args)
+        if _mcp_unknown_tool_message(out, "manage_task"):
+            legacy = {
+                "task_list_id": tid,
+                "title": title,
+                "user_google_email": user_email,
+            }
+            if notes:
+                legacy["notes"] = notes
+            if due:
+                legacy["due"] = due
+            return await _call_tool(session, "create_task", legacy)
+        return out
 
     return await _with_session(run)
 
@@ -345,8 +370,9 @@ def create_google_task(
     due: str | None = None,
 ) -> str:
     """
-    Create a task in the user's Google Tasks. Optional: task_list_id (uses first list if omitted), notes, due (RFC 3339).
-    Requires workspace-mcp OAuth (GOOGLE_OAUTH_CLIENT_ID/SECRET).
+    Create a task in the user's Google Tasks via workspace-mcp (manage_task or legacy create_task).
+    Optional: task_list_id (uses first list if omitted), notes, due (RFC 3339).
+    Requires workspace-mcp OAuth and USER_GOOGLE_EMAIL in .env.
     """
     coro = _create_google_task_async(title, task_list_id, notes, due)
     return _run_async(coro)
