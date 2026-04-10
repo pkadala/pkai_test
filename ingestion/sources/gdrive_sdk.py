@@ -115,6 +115,28 @@ def _resolve_credentials_path(path: str | None) -> str | None:
     return str((project_root / path).resolve())
 
 
+# Raw JSON string (e.g. Railway secret) — avoids committing secrets/ to the image.
+_GOOGLE_DRIVE_SA_JSON_ENV = "GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON"
+
+
+def _service_account_info_from_env() -> dict | None:
+    """Parse service account JSON from GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON if set."""
+    raw = (os.environ.get(_GOOGLE_DRIVE_SA_JSON_ENV) or "").strip()
+    if not raw:
+        return None
+    try:
+        info = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"{_GOOGLE_DRIVE_SA_JSON_ENV} must be valid JSON (single-line or paste the full key). {e}"
+        ) from e
+    if info.get("type") != "service_account":
+        raise ValueError(
+            f"{_GOOGLE_DRIVE_SA_JSON_ENV} must be a Google service account key (type: service_account)."
+        )
+    return info
+
+
 def _get_drive_service(credentials_path: str | None = None):
     """Build Drive API v3 service using service account JSON or Application Default Credentials."""
     _ensure_dotenv_loaded()
@@ -128,6 +150,11 @@ def _get_drive_service(credentials_path: str | None = None):
         ) from e
 
     scopes = ["https://www.googleapis.com/auth/drive.readonly"]
+
+    info = _service_account_info_from_env()
+    if info is not None:
+        creds = service_account.Credentials.from_service_account_info(info, scopes=scopes)
+        return build("drive", "v3", credentials=creds)
 
     tried: list[str] = []
     for raw in (
@@ -151,8 +178,9 @@ def _get_drive_service(credentials_path: str | None = None):
     if tried:
         raise ValueError(
             "Google Drive SDK: credentials path(s) set but no valid JSON file found. "
-            f"Checked: {tried}. Fix GOOGLE_DRIVE_CREDENTIALS_PATH in .env (path relative to project root, "
-            "e.g. secrets/your-service-account.json) or set GOOGLE_APPLICATION_CREDENTIALS to the key file."
+            f"Checked: {tried}. On Railway/cloud, commit no secrets: set "
+            f"{_GOOGLE_DRIVE_SA_JSON_ENV} to the full service account JSON string, or mount the key file and set "
+            "GOOGLE_APPLICATION_CREDENTIALS. Locally you can use GOOGLE_DRIVE_CREDENTIALS_PATH=secrets/your-key.json."
         )
 
     try:
@@ -218,6 +246,9 @@ def _looks_like_drive_id(s: str) -> bool:
 
 def _client_email_hint(credentials_path: str | None) -> str:
     """Read client_email from the service account JSON for error messages."""
+    info = _service_account_info_from_env()
+    if info and info.get("client_email"):
+        return str(info["client_email"])
     for raw in (
         credentials_path,
         os.environ.get("GOOGLE_DRIVE_CREDENTIALS_PATH"),
@@ -297,7 +328,8 @@ def load_documents_gdrive_sdk(
     List files from Google Drive (optionally under folder_id or folder name) and load supported documents.
     folder_id can be a Drive folder ID or a folder name (searched in Drive).
     When recursive is True (default), includes supported files in subfolders (breadth-first, up to max_files).
-    Uses GOOGLE_DRIVE_CREDENTIALS_PATH or GOOGLE_APPLICATION_CREDENTIALS for auth.
+    Uses GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON (raw JSON), or GOOGLE_DRIVE_CREDENTIALS_PATH /
+    GOOGLE_APPLICATION_CREDENTIALS (file paths), for auth.
     """
     service = _get_drive_service(credentials_path)
     sa_email = _client_email_hint(credentials_path)
